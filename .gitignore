@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.forge/
+*.log
+.env
+.env.local
+.DS_Store

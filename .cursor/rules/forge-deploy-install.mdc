@@ -1,0 +1,19 @@
+---
+description: 코드 변경 후 Forge 배포·설치를 자동으로 수행한다
+alwaysApply: true
+---
+
+# Forge 배포와 설치
+
+사용자가 구현·수정을 요청하면, 작업이 끝난 뒤 **별도 지시 없이** development에 배포하고 기존 설치를 업그레이드한다. 배포를 건너뛰지 않는다.
+
+## 절차
+
+1. `npm run check`
+2. `npx forge deploy -e development --non-interactive --approve MAJOR_VERSION_RULE`
+3. 설치된 제품마다 `npx forge install --upgrade -e development --non-interactive --confirm-scopes --site seongwoohong87.atlassian.net --product <Jira|Confluence>`
+4. `npx forge install list`로 버전이 올라갔는지 확인
+
+사이트는 `seongwoohong87.atlassian.net`. Jira와 Confluence 설치 KVS는 분리되어 있으므로 둘 다 업그레이드한다.
+
+스코프가 안 바뀌어도 `--approve MAJOR_VERSION_RULE`과 `--confirm-scopes`를 그대로 쓴다. 프롬프트가 뜨면 배포가 멈춘다.

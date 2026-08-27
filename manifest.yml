@@ -1,0 +1,216 @@
+app:
+  id: ari:cloud:ecosystem::app/f18e9fba-b5ca-45d5-afcc-cb8876402bf4
+  runtime:
+    name: nodejs22.x
+
+modules:
+  # ==========================================================
+  # Jira — 동기 차단 경로
+  # ==========================================================
+  jira:workflowValidator:
+    - key: compliance-workflow-validator
+      name: Compliance Rule Validator
+      description: >-
+        이슈 키가 있는 전환을 규정 위반 시 차단합니다. 새 워크플로우 편집기에서는 Validate details에만
+        넣으세요. Create나 Perform actions에는 넣지 마세요.
+      function: jira-validator
+      projectTypes:
+        - company-managed
+
+  jira:adminPage:
+    - key: jira-settings
+      resource: jira-settings-res
+      render: native
+      resolver:
+        function: settings-resolver
+      title: Compliance Rule Validator
+
+  jira:issuePanel:
+    - key: jira-compliance-panel
+      resource: jira-panel-res
+      render: native
+      resolver:
+        function: verdict-resolver
+      title: 규정 준수 검증
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+
+  jira:issueContext:
+    - key: jira-compliance-context
+      resource: jira-panel-res
+      render: native
+      resolver:
+        function: verdict-resolver
+      dynamicProperties:
+        function: issue-context-props
+      title: 규정 준수
+      label: 규정 준수
+      description: 이슈 규정 검증 결과. 이슈 화면 오른쪽에 표시됩니다.
+
+  # ==========================================================
+  # Confluence — 비동기 검증 + 사후 강제 경로
+  # ==========================================================
+  confluence:globalSettings:
+    - key: confluence-settings
+      resource: confluence-settings-res
+      render: native
+      resolver:
+        function: settings-resolver
+      title: Compliance Rule Validator
+
+  confluence:contentBylineItem:
+    - key: confluence-compliance-byline
+      resource: confluence-byline-res
+      render: native
+      resolver:
+        function: verdict-resolver
+      title: 규정 준수
+      # 위반 내역은 근거와 수정 가이드까지 담아 길어지므로 팝업보다 모달이 적합하다.
+      viewportContainer: modal
+      viewportSize: large
+      dynamicProperties:
+        function: byline-properties
+
+  confluence:contentAction:
+    - key: confluence-precheck
+      resource: confluence-precheck-res
+      render: native
+      resolver:
+        function: verdict-resolver
+      title: 규정 사전 검증
+      viewportSize: large
+
+  trigger:
+    - key: confluence-page-trigger
+      function: confluence-trigger
+      events:
+        # 주의: avi:confluence:published:page 는 "라이브 문서 → 페이지 전환" 이벤트이며
+        # 일반 페이지 출간이 아닙니다. spec.md 9.3 참조.
+        - avi:confluence:created:page
+        - avi:confluence:updated:page
+
+    # Jira Create는 workflowValidator가 본문을 받지 못한다 (spec 9.8).
+    # 이 사이트의 product event는 핸들러 호출 없이 침묵하므로, 생성 직후 검증은
+    # 워크플로우 후처리(이슈 키가 생긴 뒤)로 큐에 넣는다. 트리거는 인라인 수정 대비로 유지한다.
+    - key: jira-issue-trigger
+      function: jira-issue-trigger-fn
+      events:
+        - avi:jira:created:issue
+        - avi:jira:updated:issue
+
+  jira:workflowPostFunction:
+    - key: compliance-workflow-postfunction
+      name: 규정 사후 검증
+      description: >-
+        이슈가 저장된 뒤 규정 검증을 큐에 넣습니다. 새 워크플로우 편집기에서는 Create 전환의
+        Perform actions에 추가하세요. Compliance Rule Validator(전환 차단)와 다릅니다.
+      function: jira-postfunction
+      projectTypes:
+        - company-managed
+      configurationDescription:
+        expression: "'이슈 저장 후 규정 검증을 큐에 넣습니다.'"
+      # 새 편집기는 create 화면이 있어야 후처리 규칙이 목록에 뜬다. UI Kit는 미지원.
+      create:
+        resource: postfunction-config
+      edit:
+        resource: postfunction-config
+      view:
+        resource: postfunction-config
+
+  consumer:
+    - key: compliance-consumer
+      queue: compliance-validation
+      function: compliance-consumer-fn
+
+  scheduledTrigger:
+    - key: rulebook-warmup-trigger
+      function: rulebook-warmup
+      interval: day
+
+  # ==========================================================
+  # 함수
+  # ==========================================================
+  function:
+    - key: jira-validator
+      handler: index.jiraWorkflowValidator
+
+    - key: confluence-trigger
+      handler: index.confluencePageTrigger
+
+    - key: jira-issue-trigger-fn
+      handler: index.jiraIssueTrigger
+
+    - key: jira-postfunction
+      handler: index.jiraWorkflowPostFunction
+
+    # 모듈 키는 종류가 달라도 전역에서 유일해야 하므로 consumer 모듈 키와 겹치지 않게 접미사를 둔다.
+    - key: compliance-consumer-fn
+      handler: index.complianceConsumer
+      # 비동기 소비자는 기본 55초를 넘겨 실행할 수 있습니다. (최대 900초)
+      timeoutSeconds: 300
+
+    - key: rulebook-warmup
+      handler: index.rulebookWarmup
+      timeoutSeconds: 300
+
+    - key: byline-properties
+      handler: index.bylineProperties
+
+    - key: issue-context-props
+      handler: index.issueContextProperties
+
+    - key: settings-resolver
+      handler: index.settingsResolver
+
+    - key: verdict-resolver
+      handler: index.verdictResolver
+
+resources:
+  - key: jira-settings-res
+    path: src/frontend/jiraAdminPage.tsx
+  - key: jira-panel-res
+    path: src/frontend/jiraIssuePanel.tsx
+  - key: confluence-settings-res
+    path: src/frontend/confluenceGlobalSettings.tsx
+  - key: confluence-byline-res
+    path: src/frontend/confluenceBylineItem.tsx
+  - key: confluence-precheck-res
+    path: src/frontend/confluencePrecheckAction.tsx
+  - key: postfunction-config
+    path: static/workflow-postfunction/build
+
+permissions:
+  scopes:
+    # --- Jira ---
+    - read:jira-work # 이슈 필드 조회 + modifiedFields 수신 + created/updated 이벤트에 필수
+    - write:jira-work # 이슈 코멘트/프로퍼티 기록
+    - send:notification:jira # 사후 검증 FAIL 시 이메일 알림 (설정에서 켤 때만 호출)
+    - manage:jira-configuration # 워크플로우 후처리 페이로드 (Create 사후 검증)
+
+    # --- Confluence (클래식) ---
+    # 클래식은 제거하지 않는다(ECO-1292). v2 API는 granular를 요구하므로 아래에서 추가한다.
+    - read:confluence-content.all # 룰북/대상 페이지 본문(body.storage) 조회
+    - read:confluence-content.summary # 페이지 이벤트 수신 필수 스코프
+    - write:confluence-content # 위반 코멘트 등록, 버전 복원
+    - read:confluence-space.summary # 스페이스 단위 룰북 지정
+    - search:confluence # CQL 검색(`/wiki/rest/api/search`) — 룰북 후보 검색에 필수
+
+    # --- Confluence (granular) ---
+    # v2 REST는 클래식 스코프만으로는 "scope does not match"가 난다. 대응 granular를 추가한다.
+    - read:folder:confluence # 폴더 조회 (클래식 대응 없음)
+    - read:hierarchical-content:confluence # folders/pages descendants·children
+    - read:space:confluence # GET /wiki/api/v2/spaces
+    - read:page:confluence # GET /wiki/api/v2/pages, versions, space pages
+    - write:comment:confluence # POST /wiki/api/v2/footer-comments
+    - write:page:confluence # 페이지 버전 복원 등 쓰기 경로 보강
+
+    # --- 공통 ---
+    - storage:app # KVS / Secret Store
+
+  external:
+    fetch:
+      backend:
+        # 문자열 축약형은 deprecated이므로 EgressPermission 객체로 선언한다.
+        # 검증 대상 이슈/문서 본문이 Google로 나가므로 inScopeEUD는 true다.
+        # (false로 선언하면 사실과 다르며, 이 값 때문에 Runs on Atlassian 대상에서는 제외된다.)
+        - address: generativelanguage.googleapis.com
+          inScopeEUD: true
