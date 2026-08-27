@@ -65,7 +65,7 @@ LLM은 이 지점에 정확히 들어맞습니다. 자연어 규정을 판정 �
 
 - 워크플로우 전환에 검증기를 **수동 등록** (앱 설치만으로는 적용되지 않음). **Create가 아니라 이슈가 이미 있는 전환**에 등록
 - 차단 시 오류 메시지에 위반 요약 노출
-- 전체 위반 내역(규칙 ID, 근거, 수정 가이드)은 **이슈 패널**에서 상시 열람
+- 전체 위반 내역(규칙 ID, 근거, 수정 가이드)은 **이슈 패널**에서 상시 열람. 프로젝트 Browse만 있는 게스트·익명도 패널 상세를 볼 수 있습니다
 - 심각도 임계값 설정: `CRITICAL`만 차단하고 `MINOR`는 넘기는 등의 조절 가능. 패널에는 임계값 이상 위반만 표시합니다
 
 **생성과 칸반 보드**는 사전 차단을 믿을 수 없습니다. Create 전환에는 요약/설명이 검증기로 오지 않고, 칸반 끌어다 놓기는 커스텀 차단 메시지가 숨겨지거나 전환이 통과될 수 있습니다. 그래서 이슈가 저장된 뒤 **워크플로우 후처리**가 비동기 검증을 큐에 넣습니다. (이 사이트에서는 `avi:jira:created:issue` 제품 이벤트가 핸들러까지 오지 않습니다.)
@@ -105,6 +105,38 @@ Confluence는 출간 자체를 사전 차단할 수 있는 확장 지점이 Forg
 ### 3.5 감사 로그
 
 모든 판정을 `누가 / 언제 / 무엇을 / 어떤 규칙으로 / 어떻게 판정했는지` 형태로 기록합니다. 거버넌스 통제는 동작하는 것만으로 부족하고, **동작했음을 증명**할 수 있어야 합니다.
+
+## Demo 시연 화면
+
+개발 사이트에서 촬영한 실제 화면입니다. 룰북은 Confluence 스페이스 [Jason Rule Book](https://seongwoohong87.atlassian.net/wiki/spaces/JASONPOLICY)을, 검증 대상은 Jira 프로젝트 [JPD](https://seongwoohong87.atlassian.net/jira/software/c/projects/JPD)를 사용했습니다.
+
+### Confluence
+
+**룰북 설정** — 규정 문서를 Confluence 페이지로 작성합니다. 각 규칙에 `CR-01` 같은 식별자를 부여하면 위반 리포트에 규칙 ID가 정확히 인용됩니다.
+
+![Confluence 룰북 설정](./demo/Confluence-01-Establish-Rules.png)
+
+**앱 설정** — Confluence 관리 → 앱에서 Gemini API Key, 강제 모드, 룰북을 지정하고 설정을 저장합니다.
+
+![Confluence 앱 설정](./demo/Confluence-02-App-Settings.png)
+
+**위반 확인 시 화면** — 출간 후 위반이 감지되면 규정 준수 화면에 규칙 ID, 근거, 사유, 수정 방법이 표시됩니다.
+
+![Confluence 위반 확인](./demo/Confluence-03-Validation-Example.png)
+
+### Jira
+
+**앱 설정** — Jira 관리 → 앱에서 LLM, 강제 정책, 생성·칸반 이후 알림, 룰북을 지정합니다. Jira와 Confluence의 저장소는 분리되어 있으므로 양쪽에서 각각 저장해야 합니다.
+
+![Jira 앱 설정](./demo/JIRA-01-App-Settings.png)
+
+**워크플로우 사후 검증기 설정** — Create 전환의 Perform actions(작업 수행)에 `규정 사후 검증`을 등록합니다. 앱 설치만으로는 적용되지 않습니다.
+
+![Jira 워크플로우 사후 검증기 설정](./demo/JIRA-02-Set-PostFunctions.png)
+
+**위반 확인 시 화면** — 이슈 생성 후 비동기 검증이 끝나면 이슈 패널과 코멘트로 위반 내역이 표시됩니다.
+
+![Jira 위반 확인](./demo/JIRA-03-Validation-Example.png)
 
 ## 4. 기술 스택 및 구조
 
