@@ -33,6 +33,10 @@ modules:
         function: verdict-resolver
       title: 규정 준수 검증
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      # 기본은 라이선스 사용자만 invoke가 된다. 게스트·익명은 FCT accountId mismatch로 패널이 깨진다.
+      unlicensedAccess:
+        - unlicensed
+        - anonymous
 
   jira:issueContext:
     - key: jira-compliance-context

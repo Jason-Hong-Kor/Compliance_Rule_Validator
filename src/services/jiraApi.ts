@@ -178,8 +178,9 @@ export async function updateIssueTextField(
 export async function readIssueVerdict(
   issueKey: string,
 ): Promise<IssueComplianceRecord | undefined> {
+  // 게스트·익명은 asUser를 쓸 수 없다. 기록은 asApp으로 남겼으므로 같은 권한으로 읽는다.
   const response = await api
-    .asUser()
+    .asApp()
     .requestJira(route`/rest/api/3/issue/${issueKey}/properties/${ISSUE_PROPERTY_KEY}`, {
       headers: { Accept: 'application/json' },
     });

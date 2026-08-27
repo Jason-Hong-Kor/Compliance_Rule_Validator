@@ -10,9 +10,10 @@ import { validate } from '../services/validationService';
 const resolver = new Resolver();
 
 resolver.define('getIssueVerdict', async ({ payload, context }) => {
-  const issueKey =
-    (typeof payload?.issueKey === 'string' ? payload.issueKey : undefined) ??
-    (context?.extension as { issue?: { key?: string } } | undefined)?.issue?.key;
+  const fromContext = (context?.extension as { issue?: { key?: string } } | undefined)?.issue?.key;
+  const fromPayload = typeof payload?.issueKey === 'string' ? payload.issueKey : undefined;
+  // FCT에 묶인 이슈만 반환한다. payload만 믿으면 다른 이슈의 근거가 새어 나간다.
+  const issueKey = fromContext ?? fromPayload;
 
   if (!issueKey) {
     return { ok: false, message: '이슈를 식별할 수 없습니다.' };

@@ -123,8 +123,8 @@ Gemini 3.6 Flash 호출
 | `jira:workflowPostFunction` | `compliance-workflow-postfunction` | **생성 직후 사후 검증 진입점.** Create 전환의 Perform actions에 수동 등록. 새 편집기에는 create/edit/view Custom UI가 있어야 목록에 보임. Preview 모듈 |
 | `trigger` | `jira-issue-trigger` | `updated:issue`는 인라인 수정·칸반 대비. `created:issue`는 구독만 하고 핸들러에서 건너뜀(후처리와 이중 알림 방지). 함수 키는 `jira-issue-trigger-fn` |
 | `jira:adminPage` | `jira-settings` | LLM Provider/모델/API Key, 룰북 선택, 실패 정책·심각도, **사후 알림 수신자** |
-| `jira:issuePanel` | `jira-compliance-panel` | 이슈 화면 하단 앱 영역의 검증 상세 |
-| `jira:issueContext` | `jira-compliance-context` | 이슈 화면 오른쪽 「규정 준수」. 접혀 있어도 로젠지 |
+| `jira:issuePanel` | `jira-compliance-panel` | 이슈 화면 하단 앱 영역의 검증 상세. `unlicensedAccess`로 게스트·익명도 조회 |
+| `jira:issueContext` | `jira-compliance-context` | 이슈 화면 오른쪽 「규정 준수」. 접혀 있어도 로젠지. 이 모듈은 `unlicensedAccess` 미지원 |
 | `confluence:globalSettings` | `confluence-settings` | LLM 설정, 룰북 선택, **강제 모드 선택** |
 | `confluence:contentBylineItem` | `confluence-compliance-byline` | 페이지 컴플라이언스 상태 배지 → 클릭 시 위반 상세 모달 |
 | `confluence:contentAction` | `confluence-precheck` | **출간 전 온디맨드 사전 검증** (원천 차단 불가에 대한 UX 보완) |
@@ -590,6 +590,21 @@ Create에 validator를 붙이지 않기로 한 뒤(9.8) 남은 공백은 세 가
 - **중복 제거**: `eval:issue:{key}`에 본문+룰북 해시를 저장한다. 동기 validator와 비동기 소비자가 공유하므로, 이미 FAIL인 이슈를 전환하면 LLM 없이 즉시 차단되고, 칸반 DnD로 updated가 다시 와도 이중 과금·이중 알림이 나지 않는다. ERROR는 캐시하지 않아 재시도된다.
 - **알림이 닫지 못하는 것**: 생성부터 후처리·LLM까지 수 초의 노출 창이 남는다. Browse 권한자에 대한 가시성을 줄이는 **격리(이슈 보안 레벨 / 격리 프로젝트)** 는 11.3 Phase 2로 남긴다. 필드 마스킹만으로는 changelog에 원문이 남아 부족하다.
 - **스코프**: 후처리 페이로드에 `read:jira-work`와 `manage:jira-configuration`이 필요하다. 스코프 추가는 메이저 버전·재동의다. 9.12의 배포 절차를 따른다.
+
+### 9.15 게스트·익명 패널 invoke는 `unlicensedAccess`가 필요
+
+프로젝트 Browse를 연 게스트·익명(Jira public 접근)은 이슈와 댓글은 읽지만, 규정 준수 패널에서 상세를 열면 다음이 난다.
+
+```
+검증 결과를 불러올 수 없습니다
+Error: Failed to validate FCT: 'accountId' claim mismatch
+```
+
+원인은 Jira REST `asUser`가 아니다. 판정은 KVS(`verdict:issue:{key}`)에서 읽고, invoke 게이트웨이가 **Forge Context Token**을 검증하는 단계에서 막힌다. Forge 모듈은 기본이 **라이선스 사용자만**이라, 미라이선스·익명 세션으로 만든 FCT의 `accountId`가 게이트웨이 기대값과 어긋난다. UI Kit 패널 자체는 떠도 `invoke('getIssueVerdict')`가 실패한다.
+
+- **정정**: `jira:issuePanel`에 `unlicensedAccess: [unlicensed, anonymous]`를 선언한다. [Access to Forge apps for unlicensed users](https://developer.atlassian.com/platform/forge/access-to-forge-apps-for-unlicensed-users/)에 따른다. Jira 이슈 패널은 `customer`를 허용하지 않는다. `jira:issueContext`는 이 속성 자체를 지원하지 않아 넣지 않는다.
+- 게스트 유형에는 `asUser()`가 지원되지 않는다. 이슈 프로퍼티 읽기 등 남은 경로는 `asApp`으로 둔다.
+- 리졸버는 FCT에 묶인 `context.extension.issue.key`를 우선한다. payload `issueKey`만 믿으면 다른 이슈의 근거가 새어 나간다. 이슈를 볼 수 있는 사용자는 패널에서도 같은 상세를 본다.
 
 ---
 
